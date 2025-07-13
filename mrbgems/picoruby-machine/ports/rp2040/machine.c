@@ -20,8 +20,52 @@
 
 #include "pico/aon_timer.h"
 
-#ifdef PICO_MYPC
+//#define PICO_MYPC
+
+#if defined(PICO_MYPC)
+#include <stdio.h>
+#include "hardware/i2c.h"
+#include "pico/binary_info.h"
 #include "lcdspi.h"
+
+#define CARDKB_ADDR (0x5F)  
+
+void init_keyboard() {
+    i2c_init(i2c_default, 100 * 1000);
+    
+    gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
+    
+    gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
+    gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
+
+    gpio_disable_pulls(PICO_DEFAULT_I2C_SDA_PIN);
+    gpio_disable_pulls(PICO_DEFAULT_I2C_SCL_PIN);
+    
+    bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
+
+    printf("I2C initialized at 100kHz on GPIO%d(SDA), GPIO%d(SCL)\n", PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN);
+
+    // while (1) {
+    //     uint8_t data;
+    //     // Read 1 byte from the CardKB device
+    //     int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
+        
+    //     if (result == 1 && data != 0) {  // If read successful and data is not 0
+    //         printf("0x%02X\n", data);   // Print in hexadecimal format
+    //     }
+    //     sleep_ms(10);
+    // }
+}
+
+void init_lcd(){
+    //printf("lcd_init\n");
+    lcd_init();
+
+    //printf("lcd_clear\n");
+    lcd_clear();
+}
+
 #endif
 
 /*-------------------------------------
@@ -121,6 +165,10 @@ hal_init(void)
   | CLOCKS_SLEEP_EN1_CLK_PERI_UART0_BITS
   | CLOCKS_SLEEP_EN1_CLK_SYS_UART1_BITS
   | CLOCKS_SLEEP_EN1_CLK_PERI_UART1_BITS;
+#if defined(PICO_MYPC)
+  init_lcd();
+  init_keyboard();
+#endif
 #else
   #error "Unsupported Board"
 #endif
@@ -204,6 +252,18 @@ hal_getchar(void)
   if (0 < len) {
     c = tud_cdc_read_char();
   }
+
+#if defined(PICO_MYPC)
+  if(c < 0) {
+    uint8_t data;
+    int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
+    if (result == 1 && data != 0) {
+        printf("0x%02X\n", data);
+        c = (int)data;
+    }
+  }
+#endif
+
   return c;
 }
 
