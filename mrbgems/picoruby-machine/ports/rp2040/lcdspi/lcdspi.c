@@ -27,12 +27,22 @@ int lcd_char_pos = 0;
 unsigned char lcd_buffer[480 * 3] = {0};// 1440 = 480*3, 320*3 = 960
 
 void set_line_pos(short x, short y){
-    current_x = x * 8;
-    current_y = y * 16;
+    current_x = x * gui_font_width;
+    current_y = y * gui_font_height;
 }
 void get_line_pos(short *x, short *y){
-    *x = current_x / 8;
-    *y = current_y / 16;
+    if(gui_font_width!=0 && gui_font_height!=0){
+        *x = current_x / gui_font_width;
+        *y = current_y / gui_font_height;
+    }
+}
+
+void set_fcolour(int colour){
+    gui_fcolour = colour;
+}
+
+void set_bcolour(int colour){
+    gui_bcolour = colour;
 }
 
 void __not_in_flash_func(spi_write_fast)(spi_inst_t *spi, const uint8_t *src, size_t len) {
@@ -410,6 +420,10 @@ void scroll_lcd_spi(int lines) {
             draw_buffer_spi(0, i, hres - 1, i, scrollbuff);
         }
         draw_rect_spi(0, vres - lines, hres - 1, vres - 1, gui_bcolour); // erase the lines to be scrolled off
+        
+        // Adjust LCD cursor position after upward scroll
+        current_y -= lines;
+        if (current_y < 0) current_y = 0;
     } else {
         lines = -lines;
         for (int i = vres - 1; i >= lines; i--) {
@@ -417,6 +431,10 @@ void scroll_lcd_spi(int lines) {
             draw_buffer_spi(0, i, hres - 1, i, scrollbuff);
         }
         draw_rect_spi(0, 0, hres - 1, lines - 1, gui_bcolour); // erase the lines introduced at the top
+        
+        // Adjust LCD cursor position after downward scroll
+        current_y += lines;
+        if (current_y >= vres) current_y = vres - gui_font_height;
     }
 
 }
@@ -762,7 +780,7 @@ void lcd_init() {
     pico_lcd_init();
 
     set_font();
-    gui_fcolour = GREEN;
+    gui_fcolour = WHITE;
     gui_bcolour = BLACK;
 
 }

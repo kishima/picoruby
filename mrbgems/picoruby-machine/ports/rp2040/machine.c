@@ -49,14 +49,12 @@ void init_keyboard() {
     printf("I2C initialized at 100kHz on GPIO%d(SDA), GPIO%d(SCL)\n", PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN);
 }
 
-#define TERM_BUFFER_SIZE 2048
+#define FONT_HEIGHT 12
 #define TERM_COLS 60  // 480 / 8 = 60文字
-#define TERM_ROWS 20  // 320 / 16 = 20行
+#define TERM_ROWS 26  // 320 / 12 = 26.6行
 
-static char term_buffer[TERM_BUFFER_SIZE];
-static int term_cursor_x = 0;
-static int term_cursor_y = 0;
-static int term_buffer_pos = 0;
+static short term_cursor_x = 0;
+static short term_cursor_y = 0;
 static int term_fg_color = WHITE;
 static int term_bg_color = BLACK;
 
@@ -93,35 +91,30 @@ void send_response(const char *response) {
 }
 
 void term_init(){
-    // term_cursor_x = 0;
-    // term_cursor_y = 0;
     set_line_pos(term_cursor_x, term_cursor_y);
-    term_buffer_pos = 0;
     escape_state = ESCAPE_NONE;
     escape_pos = 0;
-    // term_fg_color = GREEN;
-    // term_bg_color = BLACK;
     response_pos = 0;
     response_len = 0;
-    memset(term_buffer, 0, TERM_BUFFER_SIZE);
     memset(escape_buffer, 0, sizeof(escape_buffer));
     memset(response_buffer, 0, sizeof(response_buffer));
 }
 
 void term_scroll_up() {
     printf("[SCROLL] Scrolling up one line\n");
-    scroll_lcd_spi(16);
+    scroll_lcd_spi(FONT_HEIGHT);
     term_cursor_y = TERM_ROWS - 1;
     set_line_pos(term_cursor_x, term_cursor_y);
 }
 
 void term_newline() {
     term_cursor_x = 0;
-    term_cursor_y++;
-    set_line_pos(term_cursor_x, term_cursor_y);
-    if (term_cursor_y >= TERM_ROWS) {
+    if (term_cursor_y >= TERM_ROWS - 1) {  // 最下行に達したらスクロール
         term_scroll_up();
+    } else {
+        term_cursor_y++;
     }
+    set_line_pos(term_cursor_x, term_cursor_y);
 }
 
 void term_move_cursor(int x, int y) {
@@ -372,8 +365,9 @@ void term_putchar(char c) {
                     term_newline();
                 }
                 
-                lcd_putc(0, c);
-                term_cursor_x++;
+                lcd_put_char(c, 0);
+                //term_cursor_x++;
+                get_line_pos(&term_cursor_x, &term_cursor_y);
             }
             break;
     }
@@ -382,7 +376,9 @@ void term_putchar(char c) {
 void term_input(const void *buf, int nbytes){
     const char *str = (const char *)buf;
 
-    printf("---------------\n");
+    short x,y;
+    get_line_pos(&x, &y);
+    printf("--------------- current=(%d,%d), term_cursor=(%d,%d)\n",x,y,term_cursor_x,term_cursor_y);
     // printf("term_input: buf=");
     // for (int i = 0; i < nbytes; i++) {
     //     printf("0x%02X ", (unsigned char)str[i]);
@@ -396,7 +392,7 @@ void term_input(const void *buf, int nbytes){
             printf("\\x%02X", (unsigned char)c);
         }
     }
-    printf("] ESP{%d}\n", escape_state);
+    printf("]\n");
     
     for (int i = 0; i < nbytes; i++) {
         term_putchar(str[i]);

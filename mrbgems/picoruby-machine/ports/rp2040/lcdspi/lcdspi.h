@@ -140,4 +140,6 @@ extern void pin_set_bit(int pin, unsigned int offset);
 
 extern void set_line_pos(short x, short y);
 extern void get_line_pos(short *x, short *y);
+void set_fcolour(int colour);
+void set_bcolour(int colour);
 #endif
