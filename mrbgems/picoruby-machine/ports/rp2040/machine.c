@@ -20,6 +20,10 @@
 
 #include "pico/aon_timer.h"
 
+#ifdef PICO_MYPC
+#include "lcdspi.h"
+#endif
+
 /*-------------------------------------
  *
  * HAL
