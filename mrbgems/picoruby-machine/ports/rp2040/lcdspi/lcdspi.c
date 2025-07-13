@@ -172,14 +172,14 @@ void read_buffer_spi(int x1, int y1, int x2, int y2, unsigned char *p) {
     define_region_spi(x1, y1, x2, y2, 0);
 
     //spi_init(Pico_LCD_SPI_MOD, 6000000);
-    spi_set_baudrate(Pico_LCD_SPI_MOD, 6000000);
+    //spi_set_baudrate(Pico_LCD_SPI_MOD, 6000000); //試しに修正
     //spi_read_data_len(p, 1);
     hw_read_spi((uint8_t *) p, 1);
     r = 0;
     hw_read_spi((uint8_t *) p, N);
     gpio_put(Pico_LCD_DC, 0);
     lcd_spi_raise_cs();
-    spi_set_baudrate(Pico_LCD_SPI_MOD, LCD_SPI_SPEED);
+    //spi_set_baudrate(Pico_LCD_SPI_MOD, LCD_SPI_SPEED); //試しに修正
     r = 0;
 
     while (N) {
@@ -410,14 +410,21 @@ void lcd_print_char( int fc, int bc, char c, int orientation) {
 
 }
 
-unsigned char scrollbuff[LCD_WIDTH * 3];
+unsigned char scrollbuff[LCD_WIDTH * 3 * 4]; // 4 lines buffer for chunk processing
 
 void scroll_lcd_spi(int lines) {
-    if (lines == 0)return;
+    if (lines == 0) return;
+    
+    int chunk_size = 4;  // Process 4 pixels at a time for better performance
+    
     if (lines >= 0) {
-        for (int i = 0; i < vres - lines; i++) {
-            read_buffer_spi(0, i + lines, hres - 1, i + lines, scrollbuff);
-            draw_buffer_spi(0, i, hres - 1, i, scrollbuff);
+        // Upward scroll: move content up
+        for (int i = 0; i < vres - lines; i += chunk_size) {
+            int end_y = i + chunk_size - 1;
+            if (end_y >= vres - lines) end_y = vres - lines - 1;
+            
+            read_buffer_spi(0, i + lines, hres - 1, end_y + lines, scrollbuff);
+            draw_buffer_spi(0, i, hres - 1, end_y, scrollbuff);
         }
         draw_rect_spi(0, vres - lines, hres - 1, vres - 1, gui_bcolour); // erase the lines to be scrolled off
         
@@ -425,10 +432,14 @@ void scroll_lcd_spi(int lines) {
         current_y -= lines;
         if (current_y < 0) current_y = 0;
     } else {
+        // Downward scroll: move content down
         lines = -lines;
-        for (int i = vres - 1; i >= lines; i--) {
-            read_buffer_spi(0, i - lines, hres - 1, i - lines, scrollbuff);
-            draw_buffer_spi(0, i, hres - 1, i, scrollbuff);
+        for (int i = vres - 1; i >= lines; i -= chunk_size) {
+            int start_y = i - chunk_size + 1;
+            if (start_y < lines) start_y = lines;
+            
+            read_buffer_spi(0, start_y - lines, hres - 1, i - lines, scrollbuff);
+            draw_buffer_spi(0, start_y, hres - 1, i, scrollbuff);
         }
         draw_rect_spi(0, 0, hres - 1, lines - 1, gui_bcolour); // erase the lines introduced at the top
         
@@ -436,7 +447,6 @@ void scroll_lcd_spi(int lines) {
         current_y += lines;
         if (current_y >= vres) current_y = vres - gui_font_height;
     }
-
 }
 
 void display_put_c(char c) {
