@@ -9,9 +9,7 @@
 #include <stdio.h>
 
 #include "lcdspi.h"
-//#include "i2ckbd.h"
 #include "pico/multicore.h"
-////////////////////**************************************fonts
 
 #include "fonts/font1.h"
 unsigned char *MainFont = (unsigned char *) font1;
@@ -27,6 +25,15 @@ static char s_width;
 int lcd_char_pos = 0;
 //unsigned char lcd_buffer[320 * 3] = {0};// 1440 = 480*3, 320*3 = 960
 unsigned char lcd_buffer[480 * 3] = {0};// 1440 = 480*3, 320*3 = 960
+
+void set_line_pos(short x, short y){
+    current_x = x * 8;
+    current_y = y * 16;
+}
+void get_line_pos(short *x, short *y){
+    *x = current_x / 8;
+    *y = current_y / 16;
+}
 
 void __not_in_flash_func(spi_write_fast)(spi_inst_t *spi, const uint8_t *src, size_t len) {
     // Write to TX FIFO whilst ignoring RX, then clean up afterward. When RX
@@ -64,7 +71,7 @@ void set_font() {
 
 void define_region_spi(int xstart, int ystart, int xend, int yend, int rw) {
     unsigned char coord[4];
-    
+#if 0
     // 修正版: 各コマンドでCS制御を適切に行う
     // Column Address Set
     spi_write_command(ILI9341_COLADDRSET);
@@ -98,8 +105,7 @@ void define_region_spi(int xstart, int ystart, int xend, int yend, int rw) {
     // Leave CS low and DC high for data transfer
     gpio_put(Pico_LCD_DC, 1);
     lcd_spi_lower_cs();
-    
-    /* 元のコード（コメントアウト）
+#else
     lcd_spi_lower_cs();
     gpio_put(Pico_LCD_DC, 0);//gpio_put(Pico_LCD_DC,0);
     hw_send_spi(&(uint8_t) {ILI9341_COLADDRSET}, 1);
@@ -124,7 +130,8 @@ void define_region_spi(int xstart, int ystart, int xend, int yend, int rw) {
         hw_send_spi(&(uint8_t) {ILI9341_RAMRD}, 1);
     }
     gpio_put(Pico_LCD_DC, 1);
-    */
+  
+#endif
 }
 
 void read_buffer_spi(int x1, int y1, int x2, int y2, unsigned char *p) {
@@ -351,8 +358,8 @@ void draw_rect_spi(int x1, int y1, int x2, int y2, int c) {
             p[t + 2] = col[2];
         }
         for (y = y1; y <= y2; y++) {
-            //spi_write_fast(Pico_LCD_SPI_MOD, p, i);
-            hw_send_spi(p, i);
+            spi_write_fast(Pico_LCD_SPI_MOD, p, i);
+            //hw_send_spi(p, i);
         }
 #endif
     }
@@ -477,12 +484,7 @@ void lcd_print_string(char *s) {
 
 ///////=----------------------------------------===//////
 void lcd_clear() {
-    // 背景ノイズ除去のため画面全体を黒でクリア
-    // draw_rect_spi(0, 0, 479, 319, RED);
-    // draw_rect_spi(0, 0, 479, 319, GREEN);
-    // draw_rect_spi(0, 0, 479, 319, BLUE);
     draw_rect_spi(0, 0, 479, 319, BLACK);
-    // draw_rect_spi(10, 10, 240, 160, BLUE);
 }
 
 void lcd_putc(uint8_t devn, uint8_t c) {

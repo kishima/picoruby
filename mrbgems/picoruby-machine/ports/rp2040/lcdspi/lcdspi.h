@@ -138,5 +138,6 @@ extern void lcd_clear();
 extern void reset_controller(void);
 extern void pin_set_bit(int pin, unsigned int offset);
 
-
+extern void set_line_pos(short x, short y);
+extern void get_line_pos(short *x, short *y);
 #endif

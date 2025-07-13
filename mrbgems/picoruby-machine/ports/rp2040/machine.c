@@ -20,7 +20,9 @@
 
 #include "pico/aon_timer.h"
 
+#ifndef PICO_MYPC 
 #define PICO_MYPC
+#endif
 
 #if defined(PICO_MYPC)
 #include <stdio.h>
@@ -55,88 +57,272 @@ static char term_buffer[TERM_BUFFER_SIZE];
 static int term_cursor_x = 0;
 static int term_cursor_y = 0;
 static int term_buffer_pos = 0;
-static int term_fg_color = GREEN;
+static int term_fg_color = WHITE;
 static int term_bg_color = BLACK;
 
-extern short current_x, current_y;
-extern short gui_font_width, gui_font_height;
-extern int gui_fcolour, gui_bcolour;
+extern void scroll_lcd_spi(int lines);
+extern void draw_rect_spi(int x1, int y1, int x2, int y2, int c);
 
 typedef enum {
     ESCAPE_NONE,
-    ESCAPE_CSI,
-    ESCAPE_COLOR
+    ESCAPE_START,
+    ESCAPE_CSI
 } escape_state_t;
 
 static escape_state_t escape_state = ESCAPE_NONE;
-static char escape_buffer[32];
+static char escape_buffer[64];
 static int escape_pos = 0;
 
+// Response buffer for escape sequence responses
+static char response_buffer[64];
+static int response_pos = 0;
+static int response_len = 0;
+
+void send_response(const char *response) {
+    int len = strlen(response);
+    if (len < sizeof(response_buffer)) {
+        strcpy(response_buffer, response);
+        response_pos = 0;
+        response_len = len;
+        printf("[ESC] Queued response (len=%d): ", len);
+        for (int i = 0; i < len; i++) {
+            printf("0x%02X ", (unsigned char)response[i]);
+        }
+        printf("\n");
+    }
+}
+
 void term_init(){
-    term_cursor_x = 0;
-    term_cursor_y = 0;
+    // term_cursor_x = 0;
+    // term_cursor_y = 0;
+    set_line_pos(term_cursor_x, term_cursor_y);
     term_buffer_pos = 0;
     escape_state = ESCAPE_NONE;
     escape_pos = 0;
-    term_fg_color = GREEN;
-    term_bg_color = BLACK;
+    // term_fg_color = GREEN;
+    // term_bg_color = BLACK;
+    response_pos = 0;
+    response_len = 0;
     memset(term_buffer, 0, TERM_BUFFER_SIZE);
     memset(escape_buffer, 0, sizeof(escape_buffer));
+    memset(response_buffer, 0, sizeof(response_buffer));
 }
 
 void term_scroll_up() {
-    lcd_clear();
-    term_cursor_x = 0;
-    term_cursor_y = 0;
+    printf("[SCROLL] Scrolling up one line\n");
+    scroll_lcd_spi(16);
+    term_cursor_y = TERM_ROWS - 1;
+    set_line_pos(term_cursor_x, term_cursor_y);
 }
 
 void term_newline() {
     term_cursor_x = 0;
     term_cursor_y++;
+    set_line_pos(term_cursor_x, term_cursor_y);
     if (term_cursor_y >= TERM_ROWS) {
         term_scroll_up();
     }
 }
 
-void term_process_escape_sequence(char c) {
-    if (escape_state == ESCAPE_CSI) {
-        escape_buffer[escape_pos++] = c;
+void term_move_cursor(int x, int y) {
+    if (x >= 0 && x < TERM_COLS) term_cursor_x = x;
+    if (y >= 0 && y < TERM_ROWS) term_cursor_y = y;
+    set_line_pos(term_cursor_x, term_cursor_y);
+}
+
+void term_process_csi_sequence() {
+    escape_buffer[escape_pos] = '\0';
+    char *ptr = escape_buffer;
+    
+    if (strcmp(ptr, "2J") == 0) {
+        printf("[ESC] Screen clear (2J)\n");
+        lcd_clear();
+        term_cursor_x = 0;
+        term_cursor_y = 0;
+        set_line_pos(term_cursor_x, term_cursor_y);
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'H') {
+        printf("[ESC] Cursor position (%s)\n", ptr);
+        int row = 1, col = 1;
+        if (escape_pos > 1) {
+            sscanf(ptr, "%d;%d", &row, &col);
+        }
+        term_move_cursor(col - 1, row - 1);
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'A' || ptr[escape_pos-1] == 'B' || 
+        ptr[escape_pos-1] == 'C' || ptr[escape_pos-1] == 'D') {
+        printf("[ESC] Cursor move (%s)\n", ptr);
+        int n = 1;
+        if (escape_pos > 1) {
+            n = atoi(ptr);
+            if (n == 0) n = 1;
+        }
         
-        if (c == 'm') {
-            escape_buffer[escape_pos] = '\0';
+        switch (ptr[escape_pos-1]) {
+            case 'A': term_cursor_y = (term_cursor_y - n < 0) ? 0 : term_cursor_y - n; break;
+            case 'B': term_cursor_y = (term_cursor_y + n >= TERM_ROWS) ? TERM_ROWS-1 : term_cursor_y + n; break;
+            case 'C': term_cursor_x = (term_cursor_x + n >= TERM_COLS) ? TERM_COLS-1 : term_cursor_x + n; break;
+            case 'D': term_cursor_x = (term_cursor_x - n < 0) ? 0 : term_cursor_x - n; break;
+        }
+        set_line_pos(term_cursor_x, term_cursor_y);
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'K') {
+        printf("[ESC] Erase line (%s)\n", ptr);
+        if (ptr[0] == '0' || escape_pos == 1) {
+            // Clear from cursor to end of line
+            int start_x = term_cursor_x * 8;  // Assuming 8-pixel wide font
+            int start_y = term_cursor_y * 16; // Assuming 16-pixel high font
+            int end_x = (TERM_COLS - 1) * 8;
+            int end_y = start_y + 15;
+            draw_rect_spi(start_x, start_y, end_x, end_y, term_bg_color);
+        }
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'J') {
+        printf("[ESC] Erase screen (%s)\n", ptr);
+        if (ptr[0] == '0' || escape_pos == 1) {
+            // Clear from cursor to end of screen
+            int start_x = term_cursor_x * 8;
+            int start_y = term_cursor_y * 16;
+            draw_rect_spi(start_x, start_y, LCD_WIDTH-1, LCD_HEIGHT-1, term_bg_color);
+        }
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'h' || ptr[escape_pos-1] == 'l') {
+        printf("[ESC] Mode setting (%s)\n", ptr);
+        if (strstr(ptr, "?25") != NULL) {
+            if (ptr[escape_pos-1] == 'h') {
+                printf("[ESC] Show cursor (?25h)\n");
+            } else {
+                printf("[ESC] Hide cursor (?25l)\n");
+            }
+        }
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'n') {
+        printf("[ESC] Device status report (%s)\n", ptr);
+        if (strcmp(ptr, "5") == 0) {
+            // Device status report - terminal OK
+            printf("[ESC] Processing device status request\n");
+            send_response("\x1B[0n");
+        } else if (strcmp(ptr, "6") == 0) {
+            // Cursor position report
+            char response[16];
+            snprintf(response, sizeof(response), "\x1B[%d;%dR", 
+                    term_cursor_y + 1, term_cursor_x + 1);
+            printf("[ESC] Processing cursor position request\n");
+            send_response(response);
+        }
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'F') {
+        printf("[ESC] Move to previous line start (%s)\n", ptr);
+        int n = 1;
+        if (escape_pos > 1) {
+            n = atoi(ptr);
+            if (n == 0) n = 1;
+        }
+        term_cursor_x = 0;
+        term_cursor_y = (term_cursor_y - n < 0) ? 0 : term_cursor_y - n;
+        set_line_pos(term_cursor_x, term_cursor_y);
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'G') {
+        printf("[ESC] Cursor horizontal absolute (%s)\n", ptr);
+        int col = 1;
+        if (escape_pos > 1) {
+            col = atoi(ptr);
+            if (col == 0) col = 1;
+        }
+        term_cursor_x = col - 1;
+        if (term_cursor_x >= TERM_COLS) term_cursor_x = TERM_COLS - 1;
+        set_line_pos(term_cursor_x, term_cursor_y);
+        return;
+    }
+    
+    if (ptr[escape_pos-1] == 'm') {
+        printf("[ESC] Set graphics mode (%s)\n", ptr);
+        char *token = ptr;
+        while (*token) {
+            int code = atoi(token);
             
-            char *ptr = escape_buffer;
-            while (*ptr) {
-                int code = atoi(ptr);
-                
-                switch (code) {
-                    case 30: term_fg_color = BLACK; break;
-                    case 31: term_fg_color = RED; break;
-                    case 32: term_fg_color = GREEN; break;
-                    case 33: term_fg_color = YELLOW; break;
-                    case 34: term_fg_color = BLUE; break;
-                    case 35: term_fg_color = MAGENTA; break;
-                    case 36: term_fg_color = CYAN; break;
-                    case 37: term_fg_color = WHITE; break;
-                    case 40: term_bg_color = BLACK; break;
-                    case 41: term_bg_color = RED; break;
-                    case 42: term_bg_color = GREEN; break;
-                    case 43: term_bg_color = YELLOW; break;
-                    case 44: term_bg_color = BLUE; break;
-                    case 45: term_bg_color = MAGENTA; break;
-                    case 46: term_bg_color = CYAN; break;
-                    case 47: term_bg_color = WHITE; break;
-                    case 0:
-                    default:
-                        term_fg_color = GREEN;
-                        term_bg_color = BLACK;
-                        break;
-                }
-                
-                while (*ptr && *ptr != ';') ptr++;
-                if (*ptr == ';') ptr++;
+            switch (code) {
+                case 0:
+                    term_fg_color = GREEN;
+                    term_bg_color = BLACK;
+                    break;
+                case 1:
+                    break;
+                case 30: term_fg_color = BLACK; break;
+                case 31: term_fg_color = RED; break;
+                case 32: term_fg_color = GREEN; break;
+                case 33: term_fg_color = YELLOW; break;
+                case 34: term_fg_color = BLUE; break;
+                case 35: term_fg_color = MAGENTA; break;
+                case 36: term_fg_color = CYAN; break;
+                case 37: term_fg_color = WHITE; break;
+                case 40: term_bg_color = BLACK; break;
+                case 41: term_bg_color = RED; break;
+                case 42: term_bg_color = GREEN; break;
+                case 43: term_bg_color = YELLOW; break;
+                case 44: term_bg_color = BLUE; break;
+                case 45: term_bg_color = MAGENTA; break;
+                case 46: term_bg_color = CYAN; break;
+                case 47: term_bg_color = WHITE; break;
             }
             
+            while (*token && *token != ';') token++;
+            if (*token == ';') token++;
+            else break;
+        }
+        return;
+    }
+    
+    // Handle device attribute requests
+    if (ptr[escape_pos-1] == 'c') {
+        printf("[ESC] Device attributes request (%s)\n", ptr);
+        if (strcmp(ptr, "") == 0 || strcmp(ptr, "0") == 0) {
+            // Primary device attributes - VT100 compatible
+            send_response("\x1B[?1;0c");
+        }
+        return;
+    }
+    
+    // Log unsupported escape sequences
+    printf("[ESC] Unsupported sequence: [%s\n", ptr);
+}
+
+void term_process_escape_sequence(char c) {
+    if (escape_state == ESCAPE_START) {
+        if (c == '[') {
+            escape_state = ESCAPE_CSI;
+            escape_pos = 0;
+            return;
+        } else {
+            printf("[ESC] Unsupported escape: ESC %c\n", c);
+            escape_state = ESCAPE_NONE;
+            return;
+        }
+    }
+    
+    if (escape_state == ESCAPE_CSI) {
+        if (escape_pos < sizeof(escape_buffer) - 1) {
+            escape_buffer[escape_pos++] = c;
+        }
+        
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            term_process_csi_sequence();
             escape_state = ESCAPE_NONE;
             escape_pos = 0;
         } else if (escape_pos >= sizeof(escape_buffer) - 1) {
@@ -147,8 +333,6 @@ void term_process_escape_sequence(char c) {
 }
 
 void term_putchar(char c) {
-    static int prev_x = 0, prev_y = 0;
-    static int prev_fg = GREEN, prev_bg = BLACK;
     
     if (escape_state != ESCAPE_NONE) {
         term_process_escape_sequence(c);
@@ -156,7 +340,7 @@ void term_putchar(char c) {
     }
     
     if (c == 0x1B) {
-        escape_state = ESCAPE_CSI;
+        escape_state = ESCAPE_START;
         escape_pos = 0;
         return;
     }
@@ -167,17 +351,20 @@ void term_putchar(char c) {
             break;
         case '\r':
             term_cursor_x = 0;
+            set_line_pos(term_cursor_x, term_cursor_y);
             break;
         case '\t':
             term_cursor_x = (term_cursor_x + 4) & ~3;
             if (term_cursor_x >= TERM_COLS) {
                 term_newline();
             }
+            set_line_pos(term_cursor_x, term_cursor_y);
             break;
         case '\b':
             if (term_cursor_x > 0) {
                 term_cursor_x--;
             }
+            set_line_pos(term_cursor_x, term_cursor_y);
             break;
         default:
             if (c >= 32 && c <= 126) {
@@ -185,12 +372,7 @@ void term_putchar(char c) {
                     term_newline();
                 }
                 
-                current_x = term_cursor_x * gui_font_width;
-                current_y = term_cursor_y * gui_font_height;
-                gui_fcolour = term_fg_color;
-                gui_bcolour = term_bg_color;
-                
-                lcd_print_char(term_fg_color, term_bg_color, c, ORIENT_NORMAL);
+                lcd_putc(0, c);
                 term_cursor_x++;
             }
             break;
@@ -199,18 +381,25 @@ void term_putchar(char c) {
 
 void term_input(const void *buf, int nbytes){
     const char *str = (const char *)buf;
-    
+
+    printf("---------------\n");
+    // printf("term_input: buf=");
+    // for (int i = 0; i < nbytes; i++) {
+    //     printf("0x%02X ", (unsigned char)str[i]);
+    // }
+    printf(" (len=%d) [", nbytes);
     for (int i = 0; i < nbytes; i++) {
         char c = str[i];
-        
-        if (c == 0x1B && i + 1 < nbytes && str[i + 1] == '[') {
-            escape_state = ESCAPE_CSI;
-            escape_pos = 0;
-            i++;
-            continue;
+        if (c >= 32 && c <= 126) {
+            printf("%c", c);
+        } else {
+            printf("\\x%02X", (unsigned char)c);
         }
-        
-        term_putchar(c);
+    }
+    printf("] ESP{%d}\n", escape_state);
+    
+    for (int i = 0; i < nbytes; i++) {
+        term_putchar(str[i]);
     }
 }
 
@@ -378,11 +567,13 @@ hal_idle_cpu()
 int
 hal_write(int fd, const void *buf, int nbytes)
 {
+  int len = nbytes;
 #if defined(PICO_MYPC)
   term_input(buf, nbytes);
-#endif
+#else
   tud_cdc_write(buf, nbytes);
-  int len = tud_cdc_write_flush();
+  len = tud_cdc_write_flush();
+#endif
   return len;
 }
 
@@ -406,19 +597,29 @@ int
 hal_getchar(void)
 {
   int c = -1;
+
+#if defined(PICO_MYPC)  
+  // First check if we have a response to send
+  if (response_pos < response_len) {
+    c = (unsigned char)response_buffer[response_pos++];
+    printf("[ESC] Sending response char: 0x%02X\n", c);
+    if (response_pos >= response_len) {
+      response_pos = 0;
+      response_len = 0;
+    }
+    return c;
+  }
+  
+  uint8_t data;
+  int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
+  if (result == 1 && data != 0) {
+      printf("0x%02X\n", data);
+      c = (int)data;
+  }
+#else
   int len = tud_cdc_available();
   if (0 < len) {
     c = tud_cdc_read_char();
-  }
-
-#if defined(PICO_MYPC)
-  if(c < 0) {
-    uint8_t data;
-    int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
-    if (result == 1 && data != 0) {
-        printf("0x%02X\n", data);
-        c = (int)data;
-    }
   }
 #endif
 
