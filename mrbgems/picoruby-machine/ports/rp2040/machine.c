@@ -20,13 +20,13 @@
 
 #include "pico/aon_timer.h"
 
-//#define PICO_MYPC
+#define PICO_MYPC
 
 #if defined(PICO_MYPC)
 #include <stdio.h>
 #include "hardware/i2c.h"
 #include "pico/binary_info.h"
-#include "lcdspi.h"
+#include "lcdspi/lcdspi.h"
 
 #define CARDKB_ADDR (0x5F)  
 
@@ -45,26 +45,181 @@ void init_keyboard() {
     bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
 
     printf("I2C initialized at 100kHz on GPIO%d(SDA), GPIO%d(SCL)\n", PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN);
+}
 
-    // while (1) {
-    //     uint8_t data;
-    //     // Read 1 byte from the CardKB device
-    //     int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
+#define TERM_BUFFER_SIZE 2048
+#define TERM_COLS 60  // 480 / 8 = 60文字
+#define TERM_ROWS 20  // 320 / 16 = 20行
+
+static char term_buffer[TERM_BUFFER_SIZE];
+static int term_cursor_x = 0;
+static int term_cursor_y = 0;
+static int term_buffer_pos = 0;
+static int term_fg_color = GREEN;
+static int term_bg_color = BLACK;
+
+extern short current_x, current_y;
+extern short gui_font_width, gui_font_height;
+extern int gui_fcolour, gui_bcolour;
+
+typedef enum {
+    ESCAPE_NONE,
+    ESCAPE_CSI,
+    ESCAPE_COLOR
+} escape_state_t;
+
+static escape_state_t escape_state = ESCAPE_NONE;
+static char escape_buffer[32];
+static int escape_pos = 0;
+
+void term_init(){
+    term_cursor_x = 0;
+    term_cursor_y = 0;
+    term_buffer_pos = 0;
+    escape_state = ESCAPE_NONE;
+    escape_pos = 0;
+    term_fg_color = GREEN;
+    term_bg_color = BLACK;
+    memset(term_buffer, 0, TERM_BUFFER_SIZE);
+    memset(escape_buffer, 0, sizeof(escape_buffer));
+}
+
+void term_scroll_up() {
+    lcd_clear();
+    term_cursor_x = 0;
+    term_cursor_y = 0;
+}
+
+void term_newline() {
+    term_cursor_x = 0;
+    term_cursor_y++;
+    if (term_cursor_y >= TERM_ROWS) {
+        term_scroll_up();
+    }
+}
+
+void term_process_escape_sequence(char c) {
+    if (escape_state == ESCAPE_CSI) {
+        escape_buffer[escape_pos++] = c;
         
-    //     if (result == 1 && data != 0) {  // If read successful and data is not 0
-    //         printf("0x%02X\n", data);   // Print in hexadecimal format
-    //     }
-    //     sleep_ms(10);
-    // }
+        if (c == 'm') {
+            escape_buffer[escape_pos] = '\0';
+            
+            char *ptr = escape_buffer;
+            while (*ptr) {
+                int code = atoi(ptr);
+                
+                switch (code) {
+                    case 30: term_fg_color = BLACK; break;
+                    case 31: term_fg_color = RED; break;
+                    case 32: term_fg_color = GREEN; break;
+                    case 33: term_fg_color = YELLOW; break;
+                    case 34: term_fg_color = BLUE; break;
+                    case 35: term_fg_color = MAGENTA; break;
+                    case 36: term_fg_color = CYAN; break;
+                    case 37: term_fg_color = WHITE; break;
+                    case 40: term_bg_color = BLACK; break;
+                    case 41: term_bg_color = RED; break;
+                    case 42: term_bg_color = GREEN; break;
+                    case 43: term_bg_color = YELLOW; break;
+                    case 44: term_bg_color = BLUE; break;
+                    case 45: term_bg_color = MAGENTA; break;
+                    case 46: term_bg_color = CYAN; break;
+                    case 47: term_bg_color = WHITE; break;
+                    case 0:
+                    default:
+                        term_fg_color = GREEN;
+                        term_bg_color = BLACK;
+                        break;
+                }
+                
+                while (*ptr && *ptr != ';') ptr++;
+                if (*ptr == ';') ptr++;
+            }
+            
+            escape_state = ESCAPE_NONE;
+            escape_pos = 0;
+        } else if (escape_pos >= sizeof(escape_buffer) - 1) {
+            escape_state = ESCAPE_NONE;
+            escape_pos = 0;
+        }
+    }
+}
+
+void term_putchar(char c) {
+    static int prev_x = 0, prev_y = 0;
+    static int prev_fg = GREEN, prev_bg = BLACK;
+    
+    if (escape_state != ESCAPE_NONE) {
+        term_process_escape_sequence(c);
+        return;
+    }
+    
+    if (c == 0x1B) {
+        escape_state = ESCAPE_CSI;
+        escape_pos = 0;
+        return;
+    }
+    
+    switch (c) {
+        case '\n':
+            term_newline();
+            break;
+        case '\r':
+            term_cursor_x = 0;
+            break;
+        case '\t':
+            term_cursor_x = (term_cursor_x + 4) & ~3;
+            if (term_cursor_x >= TERM_COLS) {
+                term_newline();
+            }
+            break;
+        case '\b':
+            if (term_cursor_x > 0) {
+                term_cursor_x--;
+            }
+            break;
+        default:
+            if (c >= 32 && c <= 126) {
+                if (term_cursor_x >= TERM_COLS) {
+                    term_newline();
+                }
+                
+                current_x = term_cursor_x * gui_font_width;
+                current_y = term_cursor_y * gui_font_height;
+                gui_fcolour = term_fg_color;
+                gui_bcolour = term_bg_color;
+                
+                lcd_print_char(term_fg_color, term_bg_color, c, ORIENT_NORMAL);
+                term_cursor_x++;
+            }
+            break;
+    }
+}
+
+void term_input(const void *buf, int nbytes){
+    const char *str = (const char *)buf;
+    
+    for (int i = 0; i < nbytes; i++) {
+        char c = str[i];
+        
+        if (c == 0x1B && i + 1 < nbytes && str[i + 1] == '[') {
+            escape_state = ESCAPE_CSI;
+            escape_pos = 0;
+            i++;
+            continue;
+        }
+        
+        term_putchar(c);
+    }
 }
 
 void init_lcd(){
-    //printf("lcd_init\n");
     lcd_init();
-
-    //printf("lcd_clear\n");
     lcd_clear();
+    term_init();
 }
+
 
 #endif
 
@@ -223,6 +378,9 @@ hal_idle_cpu()
 int
 hal_write(int fd, const void *buf, int nbytes)
 {
+#if defined(PICO_MYPC)
+  term_input(buf, nbytes);
+#endif
   tud_cdc_write(buf, nbytes);
   int len = tud_cdc_write_flush();
   return len;
