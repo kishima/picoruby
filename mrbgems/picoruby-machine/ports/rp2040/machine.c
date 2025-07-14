@@ -279,6 +279,9 @@ void term_process_csi_sequence() {
             if (*token == ';') token++;
             else break;
         }
+        printf("color (f=x%06X,b=x%06X)\n", term_fg_color, term_bg_color);
+        set_fcolour(term_fg_color);
+        set_bcolour(term_bg_color);
         return;
     }
     
