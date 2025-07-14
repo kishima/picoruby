@@ -203,11 +203,11 @@ void term_process_csi_sequence() {
     
     if (ptr[escape_pos-1] == 'n') {
         printf("[ESC] Device status report (%s)\n", ptr);
-        if (strcmp(ptr, "5") == 0) {
+        if (strcmp(ptr, "5n") == 0) {
             // Device status report - terminal OK
             printf("[ESC] Processing device status request\n");
             send_response("\x1B[0n");
-        } else if (strcmp(ptr, "6") == 0) {
+        } else if (strcmp(ptr, "6n") == 0) {
             // Cursor position report
             char response[16];
             snprintf(response, sizeof(response), "\x1B[%d;%dR", 
@@ -285,7 +285,7 @@ void term_process_csi_sequence() {
     // Handle device attribute requests
     if (ptr[escape_pos-1] == 'c') {
         printf("[ESC] Device attributes request (%s)\n", ptr);
-        if (strcmp(ptr, "") == 0 || strcmp(ptr, "0") == 0) {
+        if (strcmp(ptr, "c") == 0 || strcmp(ptr, "0c") == 0) {
             // Primary device attributes - VT100 compatible
             send_response("\x1B[?1;0c");
         }

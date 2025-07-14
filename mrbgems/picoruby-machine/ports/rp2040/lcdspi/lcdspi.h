@@ -142,4 +142,9 @@ extern void set_line_pos(short x, short y);
 extern void get_line_pos(short *x, short *y);
 void set_fcolour(int colour);
 void set_bcolour(int colour);
+
+// DMA functions for high-speed operations
+extern void init_dma_spi(void);
+extern void dma_spi_write(const uint8_t *src, size_t len);
+extern void dma_spi_read(uint8_t *dst, size_t len);
 #endif

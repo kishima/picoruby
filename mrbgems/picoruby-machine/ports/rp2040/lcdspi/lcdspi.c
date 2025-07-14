@@ -1,9 +1,11 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 
 #include <hardware/spi.h>
 #include <hardware/gpio.h>
+#include <hardware/dma.h>
 #include "hardware/timer.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -410,12 +412,139 @@ void lcd_print_char( int fc, int bc, char c, int orientation) {
 
 }
 
-unsigned char scrollbuff[LCD_WIDTH * 3 * 4]; // 4 lines buffer for chunk processing
+// DMA channels for high-speed SPI transfer
+static int dma_tx_channel = -1;
+static int dma_rx_channel = -1;
+static dma_channel_config dma_tx_config;
+static dma_channel_config dma_rx_config;
+
+// Large buffer for DMA-based scroll operations
+#define SCROLL_BUFFER_LINES 16
+unsigned char scrollbuff[LCD_WIDTH * 3 * SCROLL_BUFFER_LINES]; // Large buffer for DMA
+
+// Initialize DMA channels for high-speed SPI operations
+void init_dma_spi() {
+    // Claim DMA channels
+    dma_tx_channel = dma_claim_unused_channel(true);
+    dma_rx_channel = dma_claim_unused_channel(true);
+    
+    // Configure TX DMA channel
+    dma_tx_config = dma_channel_get_default_config(dma_tx_channel);
+    channel_config_set_transfer_data_size(&dma_tx_config, DMA_SIZE_8);
+    channel_config_set_dreq(&dma_tx_config, spi_get_dreq(Pico_LCD_SPI_MOD, true));
+    channel_config_set_read_increment(&dma_tx_config, true);
+    channel_config_set_write_increment(&dma_tx_config, false);
+    
+    // Configure RX DMA channel
+    dma_rx_config = dma_channel_get_default_config(dma_rx_channel);
+    channel_config_set_transfer_data_size(&dma_rx_config, DMA_SIZE_8);
+    channel_config_set_dreq(&dma_rx_config, spi_get_dreq(Pico_LCD_SPI_MOD, false));
+    channel_config_set_read_increment(&dma_rx_config, false);
+    channel_config_set_write_increment(&dma_rx_config, true);
+    
+    printf("DMA initialized: TX channel %d, RX channel %d\n", dma_tx_channel, dma_rx_channel);
+}
+
+// High-speed DMA write to SPI
+void dma_spi_write(const uint8_t *src, size_t len) {
+    dma_channel_configure(dma_tx_channel, &dma_tx_config,
+                         &spi_get_hw(Pico_LCD_SPI_MOD)->dr,
+                         src, len, true);
+    dma_channel_wait_for_finish_blocking(dma_tx_channel);
+}
+
+// High-speed DMA read from SPI
+void dma_spi_read(uint8_t *dst, size_t len) {
+    // Create dummy buffer for TX
+    static uint8_t dummy_buffer[4800]; // Large enough for typical operations
+    memset(dummy_buffer, 0xFF, sizeof(dummy_buffer));
+    
+    // Configure TX DMA config for read operation
+    dma_channel_config tx_config = dma_channel_get_default_config(dma_tx_channel);
+    channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
+    channel_config_set_dreq(&tx_config, spi_get_dreq(Pico_LCD_SPI_MOD, true));
+    channel_config_set_read_increment(&tx_config, false); // Don't increment for dummy
+    channel_config_set_write_increment(&tx_config, false);
+    
+    // Start RX DMA first
+    dma_channel_configure(dma_rx_channel, &dma_rx_config,
+                         dst, &spi_get_hw(Pico_LCD_SPI_MOD)->dr,
+                         len, false);
+    
+    // Start TX DMA to clock out data
+    dma_channel_configure(dma_tx_channel, &tx_config,
+                         &spi_get_hw(Pico_LCD_SPI_MOD)->dr,
+                         dummy_buffer, len, false);
+    
+    // Start both transfers
+    dma_channel_start(dma_rx_channel);
+    dma_channel_start(dma_tx_channel);
+    
+    // Wait for completion
+    dma_channel_wait_for_finish_blocking(dma_rx_channel);
+    dma_channel_wait_for_finish_blocking(dma_tx_channel);
+}
+
+// DMA-optimized buffer read
+void dma_read_buffer_spi(int x1, int y1, int x2, int y2, unsigned char *p) {
+    if (dma_tx_channel < 0) return; // DMA not initialized
+    
+    int N = (x2 - x1 + 1) * (y2 - y1 + 1) * 3;
+    
+    define_region_spi(x1, y1, x2, y2, 0);
+    
+    // Read one dummy byte first (ILI9488 requirement)
+    uint8_t dummy;
+    dma_spi_read(&dummy, 1);
+    
+    // Read actual data using DMA
+    dma_spi_read(p, N);
+    
+    gpio_put(Pico_LCD_DC, 0);
+    lcd_spi_raise_cs();
+    
+    // Swap R and B bytes for ILI9488
+    for (int i = 0; i < N; i += 3) {
+        uint8_t temp = p[i];
+        p[i] = p[i + 2];
+        p[i + 2] = temp;
+    }
+}
+
+// DMA-optimized buffer write
+void dma_draw_buffer_spi(int x1, int y1, int x2, int y2, unsigned char *p) {
+    if (dma_tx_channel < 0) return; // DMA not initialized
+    
+    int N = (x2 - x1 + 1) * (y2 - y1 + 1) * 3;
+    
+    define_region_spi(x1, y1, x2, y2, 1);
+    
+    // Swap R and B bytes for ILI9488 before sending
+    for (int i = 0; i < N; i += 3) {
+        uint8_t temp = p[i];
+        p[i] = p[i + 2];
+        p[i + 2] = temp;
+    }
+    
+    // Write data using DMA
+    dma_spi_write(p, N);
+    
+    // Swap back to original format
+    for (int i = 0; i < N; i += 3) {
+        uint8_t temp = p[i];
+        p[i] = p[i + 2];
+        p[i + 2] = temp;
+    }
+    
+    lcd_spi_raise_cs();
+}
 
 void scroll_lcd_spi(int lines) {
     if (lines == 0) return;
     
-    int chunk_size = 4;  // Process 4 pixels at a time for better performance
+    // Disable DMA for now - fallback to regular method for stability
+    bool use_dma = false; // (dma_tx_channel >= 0);
+    int chunk_size = use_dma ? SCROLL_BUFFER_LINES : 4;
     
     if (lines >= 0) {
         // Upward scroll: move content up
@@ -423,12 +552,16 @@ void scroll_lcd_spi(int lines) {
             int end_y = i + chunk_size - 1;
             if (end_y >= vres - lines) end_y = vres - lines - 1;
             
-            read_buffer_spi(0, i + lines, hres - 1, end_y + lines, scrollbuff);
-            draw_buffer_spi(0, i, hres - 1, end_y, scrollbuff);
+            if (use_dma) {
+                dma_read_buffer_spi(0, i + lines, hres - 1, end_y + lines, scrollbuff);
+                dma_draw_buffer_spi(0, i, hres - 1, end_y, scrollbuff);
+            } else {
+                read_buffer_spi(0, i + lines, hres - 1, end_y + lines, scrollbuff);
+                draw_buffer_spi(0, i, hres - 1, end_y, scrollbuff);
+            }
         }
-        draw_rect_spi(0, vres - lines, hres - 1, vres - 1, gui_bcolour); // erase the lines to be scrolled off
+        draw_rect_spi(0, vres - lines, hres - 1, vres - 1, gui_bcolour);
         
-        // Adjust LCD cursor position after upward scroll
         current_y -= lines;
         if (current_y < 0) current_y = 0;
     } else {
@@ -438,12 +571,16 @@ void scroll_lcd_spi(int lines) {
             int start_y = i - chunk_size + 1;
             if (start_y < lines) start_y = lines;
             
-            read_buffer_spi(0, start_y - lines, hres - 1, i - lines, scrollbuff);
-            draw_buffer_spi(0, start_y, hres - 1, i, scrollbuff);
+            if (use_dma) {
+                dma_read_buffer_spi(0, start_y - lines, hres - 1, i - lines, scrollbuff);
+                dma_draw_buffer_spi(0, start_y, hres - 1, i, scrollbuff);
+            } else {
+                read_buffer_spi(0, start_y - lines, hres - 1, i - lines, scrollbuff);
+                draw_buffer_spi(0, start_y, hres - 1, i, scrollbuff);
+            }
         }
-        draw_rect_spi(0, 0, hres - 1, lines - 1, gui_bcolour); // erase the lines introduced at the top
+        draw_rect_spi(0, 0, hres - 1, lines - 1, gui_bcolour);
         
-        // Adjust LCD cursor position after downward scroll
         current_y += lines;
         if (current_y >= vres) current_y = vres - gui_font_height;
     }
@@ -788,6 +925,9 @@ void lcd_spi_init() {
 void lcd_init() {
     lcd_spi_init();
     pico_lcd_init();
+    
+    // Initialize DMA for high-speed operations
+    init_dma_spi();
 
     set_font();
     gui_fcolour = WHITE;

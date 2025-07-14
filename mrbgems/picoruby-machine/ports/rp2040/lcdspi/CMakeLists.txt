@@ -14,5 +14,6 @@ target_link_libraries(lcdspi PRIVATE
     hardware_spi
     hardware_gpio
     hardware_timer
+    hardware_dma
     pico_multicore
 )
