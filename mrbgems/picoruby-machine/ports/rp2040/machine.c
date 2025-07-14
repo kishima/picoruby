@@ -24,6 +24,13 @@
 #define PICO_MYPC
 #endif
 
+// Debug printf control
+#ifdef DEBUG_TERMINAL
+#define debug_printf(...) printf(__VA_ARGS__)
+#else
+#define debug_printf(...) ((void)0)
+#endif
+
 #if defined(PICO_MYPC)
 #include <stdio.h>
 #include "hardware/i2c.h"
@@ -46,7 +53,7 @@ void init_keyboard() {
     
     bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
 
-    printf("I2C initialized at 100kHz on GPIO%d(SDA), GPIO%d(SCL)\n", PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN);
+    debug_printf("I2C initialized at 100kHz on GPIO%d(SDA), GPIO%d(SCL)\n", PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN);
 }
 
 #define FONT_HEIGHT 12
@@ -82,11 +89,11 @@ void send_response(const char *response) {
         strcpy(response_buffer, response);
         response_pos = 0;
         response_len = len;
-        printf("[ESC] Queued response (len=%d): ", len);
+        debug_printf("[ESC] Queued response (len=%d): ", len);
         for (int i = 0; i < len; i++) {
-            printf("0x%02X ", (unsigned char)response[i]);
+            debug_printf("0x%02X ", (unsigned char)response[i]);
         }
-        printf("\n");
+        debug_printf("\n");
     }
 }
 
@@ -101,7 +108,7 @@ void term_init(){
 }
 
 void term_scroll_up() {
-    printf("[SCROLL] Scrolling up one line\n");
+    debug_printf("[SCROLL] Scrolling up one line\n");
     scroll_lcd_spi(FONT_HEIGHT);
     term_cursor_y = TERM_ROWS - 1;
     set_line_pos(term_cursor_x, term_cursor_y);
@@ -128,7 +135,7 @@ void term_process_csi_sequence() {
     char *ptr = escape_buffer;
     
     if (strcmp(ptr, "2J") == 0) {
-        printf("[ESC] Screen clear (2J)\n");
+        debug_printf("[ESC] Screen clear (2J)\n");
         lcd_clear();
         term_cursor_x = 0;
         term_cursor_y = 0;
@@ -137,7 +144,7 @@ void term_process_csi_sequence() {
     }
     
     if (ptr[escape_pos-1] == 'H') {
-        printf("[ESC] Cursor position (%s)\n", ptr);
+        debug_printf("[ESC] Cursor position (%s)\n", ptr);
         int row = 1, col = 1;
         if (escape_pos > 1) {
             sscanf(ptr, "%d;%d", &row, &col);
@@ -148,7 +155,7 @@ void term_process_csi_sequence() {
     
     if (ptr[escape_pos-1] == 'A' || ptr[escape_pos-1] == 'B' || 
         ptr[escape_pos-1] == 'C' || ptr[escape_pos-1] == 'D') {
-        printf("[ESC] Cursor move (%s)\n", ptr);
+        debug_printf("[ESC] Cursor move (%s)\n", ptr);
         int n = 1;
         if (escape_pos > 1) {
             n = atoi(ptr);
@@ -166,7 +173,7 @@ void term_process_csi_sequence() {
     }
     
     if (ptr[escape_pos-1] == 'K') {
-        printf("[ESC] Erase line (%s)\n", ptr);
+        debug_printf("[ESC] Erase line (%s)\n", ptr);
         if (ptr[0] == '0' || escape_pos == 1) {
             // Clear from cursor to end of line
             int start_x = term_cursor_x * 8;  // Assuming 8-pixel wide font
@@ -179,7 +186,7 @@ void term_process_csi_sequence() {
     }
     
     if (ptr[escape_pos-1] == 'J') {
-        printf("[ESC] Erase screen (%s)\n", ptr);
+        debug_printf("[ESC] Erase screen (%s)\n", ptr);
         if (ptr[0] == '0' || escape_pos == 1) {
             // Clear from cursor to end of screen
             int start_x = term_cursor_x * 8;
@@ -190,36 +197,36 @@ void term_process_csi_sequence() {
     }
     
     if (ptr[escape_pos-1] == 'h' || ptr[escape_pos-1] == 'l') {
-        printf("[ESC] Mode setting (%s)\n", ptr);
+        debug_printf("[ESC] Mode setting (%s)\n", ptr);
         if (strstr(ptr, "?25") != NULL) {
             if (ptr[escape_pos-1] == 'h') {
-                printf("[ESC] Show cursor (?25h)\n");
+                debug_printf("[ESC] Show cursor (?25h)\n");
             } else {
-                printf("[ESC] Hide cursor (?25l)\n");
+                debug_printf("[ESC] Hide cursor (?25l)\n");
             }
         }
         return;
     }
     
     if (ptr[escape_pos-1] == 'n') {
-        printf("[ESC] Device status report (%s)\n", ptr);
+        debug_printf("[ESC] Device status report (%s)\n", ptr);
         if (strcmp(ptr, "5n") == 0) {
             // Device status report - terminal OK
-            printf("[ESC] Processing device status request\n");
+            debug_printf("[ESC] Processing device status request\n");
             send_response("\x1B[0n");
         } else if (strcmp(ptr, "6n") == 0) {
             // Cursor position report
             char response[16];
             snprintf(response, sizeof(response), "\x1B[%d;%dR", 
                     term_cursor_y + 1, term_cursor_x + 1);
-            printf("[ESC] Processing cursor position request\n");
+            debug_printf("[ESC] Processing cursor position request\n");
             send_response(response);
         }
         return;
     }
     
     if (ptr[escape_pos-1] == 'F') {
-        printf("[ESC] Move to previous line start (%s)\n", ptr);
+        debug_printf("[ESC] Move to previous line start (%s)\n", ptr);
         int n = 1;
         if (escape_pos > 1) {
             n = atoi(ptr);
@@ -232,7 +239,7 @@ void term_process_csi_sequence() {
     }
     
     if (ptr[escape_pos-1] == 'G') {
-        printf("[ESC] Cursor horizontal absolute (%s)\n", ptr);
+        debug_printf("[ESC] Cursor horizontal absolute (%s)\n", ptr);
         int col = 1;
         if (escape_pos > 1) {
             col = atoi(ptr);
@@ -245,7 +252,7 @@ void term_process_csi_sequence() {
     }
     
     if (ptr[escape_pos-1] == 'm') {
-        printf("[ESC] Set graphics mode (%s)\n", ptr);
+        debug_printf("[ESC] Set graphics mode (%s)\n", ptr);
         char *token = ptr;
         while (*token) {
             int code = atoi(token);
@@ -279,7 +286,7 @@ void term_process_csi_sequence() {
             if (*token == ';') token++;
             else break;
         }
-        printf("color (f=x%06X,b=x%06X)\n", term_fg_color, term_bg_color);
+        debug_printf("color (f=x%06X,b=x%06X)\n", term_fg_color, term_bg_color);
         set_fcolour(term_fg_color);
         set_bcolour(term_bg_color);
         return;
@@ -287,7 +294,7 @@ void term_process_csi_sequence() {
     
     // Handle device attribute requests
     if (ptr[escape_pos-1] == 'c') {
-        printf("[ESC] Device attributes request (%s)\n", ptr);
+        debug_printf("[ESC] Device attributes request (%s)\n", ptr);
         if (strcmp(ptr, "c") == 0 || strcmp(ptr, "0c") == 0) {
             // Primary device attributes - VT100 compatible
             send_response("\x1B[?1;0c");
@@ -296,7 +303,7 @@ void term_process_csi_sequence() {
     }
     
     // Log unsupported escape sequences
-    printf("[ESC] Unsupported sequence: [%s\n", ptr);
+    debug_printf("[ESC] Unsupported sequence: [%s\n", ptr);
 }
 
 void term_process_escape_sequence(char c) {
@@ -306,7 +313,7 @@ void term_process_escape_sequence(char c) {
             escape_pos = 0;
             return;
         } else {
-            printf("[ESC] Unsupported escape: ESC %c\n", c);
+            debug_printf("[ESC] Unsupported escape: ESC %c\n", c);
             escape_state = ESCAPE_NONE;
             return;
         }
@@ -381,21 +388,21 @@ void term_input(const void *buf, int nbytes){
 
     short x,y;
     get_line_pos(&x, &y);
-    printf("--------------- current=(%d,%d), term_cursor=(%d,%d)\n",x,y,term_cursor_x,term_cursor_y);
+    debug_printf("--------------- current=(%d,%d), term_cursor=(%d,%d)\n",x,y,term_cursor_x,term_cursor_y);
     // printf("term_input: buf=");
     // for (int i = 0; i < nbytes; i++) {
     //     printf("0x%02X ", (unsigned char)str[i]);
     // }
-    printf(" (len=%d) [", nbytes);
+    debug_printf(" (len=%d) [", nbytes);
     for (int i = 0; i < nbytes; i++) {
         char c = str[i];
         if (c >= 32 && c <= 126) {
-            printf("%c", c);
+            debug_printf("%c", c);
         } else {
-            printf("\\x%02X", (unsigned char)c);
+            debug_printf("\\x%02X", (unsigned char)c);
         }
     }
-    printf("]\n");
+    debug_printf("]\n");
     
     for (int i = 0; i < nbytes; i++) {
         term_putchar(str[i]);
@@ -601,7 +608,7 @@ hal_getchar(void)
   // First check if we have a response to send
   if (response_pos < response_len) {
     c = (unsigned char)response_buffer[response_pos++];
-    printf("[ESC] Sending response char: 0x%02X\n", c);
+    debug_printf("[ESC] Sending response char: 0x%02X\n", c);
     if (response_pos >= response_len) {
       response_pos = 0;
       response_len = 0;
@@ -612,7 +619,7 @@ hal_getchar(void)
   uint8_t data;
   int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
   if (result == 1 && data != 0) {
-      printf("0x%02X\n", data);
+      debug_printf("0x%02X\n", data);
       c = (int)data;
   }
 #else
