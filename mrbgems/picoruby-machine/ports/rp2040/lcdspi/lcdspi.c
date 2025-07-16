@@ -927,7 +927,7 @@ void lcd_init() {
     pico_lcd_init();
     
     // Initialize DMA for high-speed operations
-    init_dma_spi();
+    //init_dma_spi();
 
     set_font();
     gui_fcolour = WHITE;

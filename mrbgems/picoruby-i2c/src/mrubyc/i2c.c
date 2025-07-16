@@ -1,5 +1,7 @@
 #include <mrubyc.h>
 
+#include <stdio.h>
+
 static void
 c__write(mrbc_vm *vm, mrbc_value *v, int argc)
 {
@@ -49,6 +51,7 @@ c__init(mrbc_vm *vm, mrbc_value *v, int argc)
 {
   int unit_num = I2C_unit_name_to_unit_num((const char *)GET_STRING_ARG(1));
   uint32_t frequency = (uint32_t)GET_INT_ARG(2);
+  printf("frequency:%d\n",frequency);
   i2c_status_t status = I2C_gpio_init(unit_num, frequency, (uint8_t)GET_INT_ARG(3), (uint8_t)GET_INT_ARG(4));
   if (status < 0) {
     char message[30];

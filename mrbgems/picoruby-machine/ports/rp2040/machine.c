@@ -25,6 +25,8 @@
 #endif
 
 // Debug printf control
+#define DEBUG_TERMINAL
+
 #ifdef DEBUG_TERMINAL
 #define debug_printf(...) printf(__VA_ARGS__)
 #else
@@ -39,20 +41,83 @@
 
 #define CARDKB_ADDR (0x5F)  
 
+void i2c_scan(int no){
+  // I2C1 device scan with timeout
+  printf("Scanning %d devices...\n",no);
+  printf("     0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
+  printf("00:  ");
+  
+  for (int addr = 0x00; addr <= 0x7F; addr++) {
+    if (addr < 0x08) {
+      if (addr % 16 == 0 && addr > 0) {
+        printf("\n%02X: ", addr);
+      }
+      printf("   ");
+    } else if (addr > 0x77) {
+      printf("   ");
+    } else {
+      uint8_t data;
+      // Use timeout version to prevent blocking
+      int result = 0;
+      if(no==0){
+        result = i2c_read_timeout_us(i2c0, addr, &data, 1, false, 1000);
+      }else{
+        result = i2c_read_timeout_us(i2c1, addr, &data, 1, false, 1000);
+      }
+      if (result == 1) {
+        printf("%02X ", addr);
+      } else {
+        printf("-- ");
+      }
+      sleep_ms(1);  // Small delay to prevent overwhelming the bus
+    }
+    
+    if ((addr + 1) % 16 == 0) {
+      printf("\n");
+      if (addr < 0x70) {
+        printf("%02X: ", addr + 1);
+      }
+    }
+  }
+  printf("scan complete.\n");
+
+}
+
+void test_i2c1(){
+  printf("test_i2c1\n");  
+  i2c_init(i2c1, 100 * 1000);          // i2c1を使用
+
+  gpio_set_function(2, GPIO_FUNC_I2C);  // GPIO2をI2C1 SDA
+  gpio_set_function(3, GPIO_FUNC_I2C);  // GPIO3をI2C1 SCL
+
+  gpio_pull_up(2);                      // I2C1 SDA プルアップ
+  gpio_pull_up(3);                      // I2C1 SCL プルアップ
+
+  // gpio_disable_pulls(2);                // I2C1 SDA プルアップ無効
+  // gpio_disable_pulls(3);                // I2C1 SCL プルアップ無効
+
+  bi_decl(bi_2pins_with_func(2, 3, GPIO_FUNC_I2C));
+
+}
+
 void init_keyboard() {
+    //test_i2c1();
+
     i2c_init(i2c_default, 100 * 1000);
     
     gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
     
-    gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
-    gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
+    // gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
+    // gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
 
     gpio_disable_pulls(PICO_DEFAULT_I2C_SDA_PIN);
     gpio_disable_pulls(PICO_DEFAULT_I2C_SCL_PIN);
     
     bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
 
+    i2c_scan(0);
+    //i2c_scan(1);
     debug_printf("I2C initialized at 100kHz on GPIO%d(SDA), GPIO%d(SCL)\n", PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN);
 }
 

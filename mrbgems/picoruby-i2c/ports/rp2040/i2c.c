@@ -46,6 +46,7 @@ I2C_unit_name_to_unit_num(const char *unit_name)
 i2c_status_t
 I2C_gpio_init(int unit_num, uint32_t frequency, int8_t sda_pin, int8_t scl_pin)
 {
+  printf("unit_num:%d\n",unit_num);
   i2c_inst_t *unit;
   UNIT_SELECT();
   i2c_init(unit, frequency);

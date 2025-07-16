@@ -5,7 +5,6 @@
 /bin/install
 /bin/irb
 /bin/ls
-/bin/machine-id
 /bin/mkdir
 /bin/mv
 /bin/nmble
@@ -18,3 +17,4 @@
 /bin/touch
 /bin/vim
 /bin/wifi_connect
+/bin/m
