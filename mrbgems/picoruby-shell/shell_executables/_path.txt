@@ -18,3 +18,5 @@
 /bin/vim
 /bin/wifi_connect
 /bin/m
+/bin/l
+
