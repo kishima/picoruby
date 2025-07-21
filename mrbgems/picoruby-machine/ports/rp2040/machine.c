@@ -101,8 +101,8 @@ void test_i2c1(){
 }
 
 void init_keyboard() {
-    //test_i2c1();
-
+#if 0
+  printf("init_i2c1\n");  
     i2c_init(i2c_default, 100 * 1000);
     
     gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
@@ -117,8 +117,20 @@ void init_keyboard() {
     bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
 
     i2c_scan(0);
-    //i2c_scan(1);
     debug_printf("I2C initialized at 100kHz on GPIO%d(SDA), GPIO%d(SCL)\n", PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN);
+
+#else
+  printf("init_i2c1\n");  
+  i2c_init(i2c1, 100 * 1000);          // i2c1を使用
+
+  gpio_set_function(2, GPIO_FUNC_I2C);  // GPIO2をI2C1 SDA
+  gpio_set_function(3, GPIO_FUNC_I2C);  // GPIO3をI2C1 SCL
+
+  gpio_pull_up(2);                      // I2C1 SDA プルアップ
+  gpio_pull_up(3);                      // I2C1 SCL プルアップ
+
+  i2c_scan(1);
+#endif
 }
 
 #define FONT_HEIGHT 12
@@ -682,7 +694,8 @@ hal_getchar(void)
   }
   
   uint8_t data;
-  int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
+  //int result = i2c_read_blocking(i2c_default, CARDKB_ADDR, &data, 1, false);
+  int result = i2c_read_blocking(i2c1, CARDKB_ADDR, &data, 1, false);
   if (result == 1 && data != 0) {
       debug_printf("0x%02X\n", data);
       c = (int)data;
