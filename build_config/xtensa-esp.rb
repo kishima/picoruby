@@ -32,5 +32,7 @@ MRuby::CrossBuild.new("esp32") do |conf|
   conf.gem core: "picoruby-picoline"
   conf.gem core: "picoruby-base64"
   conf.gem core: "picoruby-mbedtls"
+  conf.gem core: "picoruby-m5unified"
+
   conf.picoruby(alloc_libc: false)
 end

@@ -1,0 +1,35 @@
+# Type definitions for M5Unified
+
+class M5
+  def self.begin: () -> void
+  def self.update: () -> void
+
+  class Display
+    BLACK: Integer
+    WHITE: Integer
+    RED: Integer
+    GREEN: Integer
+    BLUE: Integer
+    YELLOW: Integer
+    CYAN: Integer
+    MAGENTA: Integer
+
+    def self.clear: () -> void
+    def self.print: (String) -> void
+    def self.println: (String) -> void
+    def self.draw_pixel: (Integer, Integer, Integer) -> void
+    def self.fill_screen: (Integer) -> void
+  end
+
+  class BtnA
+    def self.pressed?: () -> bool
+  end
+
+  class BtnB
+    def self.pressed?: () -> bool
+  end
+
+  class BtnC
+    def self.pressed?: () -> bool
+  end
+end
