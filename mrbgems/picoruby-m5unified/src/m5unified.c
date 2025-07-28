@@ -1,6 +1,6 @@
 #include "m5unified.h"
 
-void mrb_picoruby_m5unified_gem_init(struct VM *vm)
+void mrbc_m5unified_init(mrbc_vm *vm)
 {
   // M5 main class
   mrbc_class *m5_class = mrbc_define_class(vm, "M5", mrbc_class_object);
@@ -28,12 +28,27 @@ void mrb_picoruby_m5unified_gem_init(struct VM *vm)
   mrbc_define_method(vm, btn_c_class, "pressed?", mrb_m5_btn_c_is_pressed);
 
   // Color constants
-  mrbc_set_const(vm, display_class, "BLACK", &mrbc_fixnum_value(0x0000));
-  mrbc_set_const(vm, display_class, "WHITE", &mrbc_fixnum_value(0xFFFF));
-  mrbc_set_const(vm, display_class, "RED", &mrbc_fixnum_value(0xF800));
-  mrbc_set_const(vm, display_class, "GREEN", &mrbc_fixnum_value(0x07E0));
-  mrbc_set_const(vm, display_class, "BLUE", &mrbc_fixnum_value(0x001F));
-  mrbc_set_const(vm, display_class, "YELLOW", &mrbc_fixnum_value(0xFFE0));
-  mrbc_set_const(vm, display_class, "CYAN", &mrbc_fixnum_value(0x07FF));
-  mrbc_set_const(vm, display_class, "MAGENTA", &mrbc_fixnum_value(0xF81F));
+  mrbc_value black_val = mrbc_fixnum_value(0x0000);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("BLACK"), &black_val);
+  
+  mrbc_value white_val = mrbc_fixnum_value(0xFFFF);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("WHITE"), &white_val);
+  
+  mrbc_value red_val = mrbc_fixnum_value(0xF800);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("RED"), &red_val);
+  
+  mrbc_value green_val = mrbc_fixnum_value(0x07E0);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("GREEN"), &green_val);
+  
+  mrbc_value blue_val = mrbc_fixnum_value(0x001F);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("BLUE"), &blue_val);
+  
+  mrbc_value yellow_val = mrbc_fixnum_value(0xFFE0);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("YELLOW"), &yellow_val);
+  
+  mrbc_value cyan_val = mrbc_fixnum_value(0x07FF);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("CYAN"), &cyan_val);
+  
+  mrbc_value magenta_val = mrbc_fixnum_value(0xF81F);
+  mrbc_set_class_const(display_class, mrbc_str_to_symid("MAGENTA"), &magenta_val);
 }
