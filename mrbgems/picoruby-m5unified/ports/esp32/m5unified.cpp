@@ -9,7 +9,9 @@ extern "C" {
 // Initialize M5 hardware
 void mrb_m5_begin(struct VM *vm, mrb_value *v, int argc)
 {
-  M5.begin();
+  auto cfg = M5.config();
+  M5.begin(cfg);
+
   SET_NIL_RETURN();
 }
 
@@ -27,9 +29,23 @@ void mrb_m5_display_clear(struct VM *vm, mrb_value *v, int argc)
   SET_NIL_RETURN();
 }
 
+void mrb_m5_display_set_text_size(struct VM *vm, mrb_value *v, int argc)
+{
+  if (argc != 1 || GET_TT_ARG(1) != MRBC_TT_INTEGER) {
+    printf("input error");
+    SET_NIL_RETURN();
+    return;
+  }
+  int size = (int)GET_INT_ARG(1);
+  //printf("setTextSize=%d",size);
+  M5.Display.setTextSize(size);
+  SET_NIL_RETURN();
+}
+
 void mrb_m5_display_print(struct VM *vm, mrb_value *v, int argc)
 {
   if (argc != 1 || GET_TT_ARG(1) != MRBC_TT_STRING) {
+    printf("input error");
     SET_NIL_RETURN();
     return;
   }
@@ -78,6 +94,7 @@ void mrb_m5_display_fill_screen(struct VM *vm, mrb_value *v, int argc)
   }
   
   int color = GET_INT_ARG(1);
+  printf("fillscreen=%x\n",color);
   M5.Display.fillScreen(color);
   
   SET_NIL_RETURN();

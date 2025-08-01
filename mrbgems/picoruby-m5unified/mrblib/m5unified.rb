@@ -5,12 +5,16 @@ class M5
     # @return [void]
     def begin
       # Implemented in C
+      puts "begin"
+      _begin()
     end
 
     # Update M5 state (call this in main loop)
     # @return [void]
     def update
       # Implemented in C
+      puts "update"
+      _update()
     end
   end
 
@@ -20,38 +24,40 @@ class M5
       # Clear the display
       # @return [void]
       def clear
+        puts "clear"
+        _clear()
         # Implemented in C
       end
 
-      # Print text to display
-      # @param text [String] text to print
-      # @return [void]
-      def print(text)
-        # Implemented in C
-      end
+      # # Print text to display
+      # # @param text [String] text to print
+      # # @return [void]
+      # def print(text)
+      #   # Implemented in C
+      # end
 
-      # Print text with newline to display
-      # @param text [String] text to print
-      # @return [void]
-      def println(text)
-        # Implemented in C
-      end
+      # # Print text with newline to display
+      # # @param text [String] text to print
+      # # @return [void]
+      # def println(text)
+      #   # Implemented in C
+      # end
 
-      # Draw a pixel at specified coordinates
-      # @param x [Integer] x coordinate
-      # @param y [Integer] y coordinate
-      # @param color [Integer] color value
-      # @return [void]
-      def draw_pixel(x, y, color)
-        # Implemented in C
-      end
+      # # Draw a pixel at specified coordinates
+      # # @param x [Integer] x coordinate
+      # # @param y [Integer] y coordinate
+      # # @param color [Integer] color value
+      # # @return [void]
+      # def draw_pixel(x, y, color)
+      #   # Implemented in C
+      # end
 
-      # Fill entire screen with color
-      # @param color [Integer] color value
-      # @return [void]
-      def fill_screen(color)
-        # Implemented in C
-      end
+      # # Fill entire screen with color
+      # # @param color [Integer] color value
+      # # @return [void]
+      # def fill_screen(color)
+      #   # Implemented in C
+      # end
     end
   end
 

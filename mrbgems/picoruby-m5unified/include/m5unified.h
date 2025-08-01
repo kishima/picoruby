@@ -14,7 +14,9 @@ void mrb_m5_begin(struct VM *vm, mrb_value *v, int argc);
 void mrb_m5_update(struct VM *vm, mrb_value *v, int argc);
 
 // Display methods
+void mrb_m5_display_test(struct VM *vm, mrb_value *v, int argc);
 void mrb_m5_display_clear(struct VM *vm, mrb_value *v, int argc);
+void mrb_m5_display_set_text_size(struct VM *vm, mrb_value *v, int argc);
 void mrb_m5_display_print(struct VM *vm, mrb_value *v, int argc);
 void mrb_m5_display_println(struct VM *vm, mrb_value *v, int argc);
 void mrb_m5_display_draw_pixel(struct VM *vm, mrb_value *v, int argc);
