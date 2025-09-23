@@ -35,11 +35,11 @@ reset_psg(mrb_state *mrb)
   rb.head = 0;
   rb.tail = 0;
   psg_cs_token_t t = PSG_enter_critical();
-  memset(&psg, 0, sizeof(psg));
-  psg.r.volume[0] = psg.r.volume[1] = psg.r.volume[2] = 15; // max volume. no envelope
-  psg.r.mixer = 0x38; // all noise off, all tone on
-  psg.mute_mask = 0x07; // all tracks muted. The driver must unmute first!
-  psg.pan[0] = psg.pan[1] = psg.pan[2] = 8; // center pan
+  memset(&psg_, 0, sizeof(psg_));
+  psg_.r.volume[0] = psg_.r.volume[1] = psg_.r.volume[2] = 15; // max volume. no envelope
+  psg_.r.mixer = 0x38; // all noise off, all tone on
+  psg_.mute_mask = 0x07; // all tracks muted. The driver must unmute first!
+  psg_.pan[0] = psg_.pan[1] = psg_.pan[2] = 8; // center pan
   PSG_exit_critical(t);
 }
 

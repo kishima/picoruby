@@ -200,7 +200,7 @@ extern volatile uint32_t wr_idx; // only core0 writes
 extern volatile uint32_t rd_idx; // only core1 writes
 
 /* PSG global state */
-extern psg_t psg;
+extern psg_t psg_;
 extern psg_ringbuf_t rb;
 
 #ifdef __cplusplus

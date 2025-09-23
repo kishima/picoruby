@@ -3,7 +3,6 @@
  */
 
 #include <mrubyc.h>
-#include "psg.h"
 
 static void
 c_driver_send_reg(mrbc_vm *vm, mrbc_value *v, int argc)
@@ -13,7 +12,7 @@ c_driver_send_reg(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1]) || !mrbc_integer_p(&v[2])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER || mrbc_type(v[2]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "arguments must be integers");
     return;
   }
@@ -23,7 +22,7 @@ c_driver_send_reg(mrbc_vm *vm, mrbc_value *v, int argc)
   mrbc_int_t tick_delay = 0;
   
   if (argc == 3) {
-    if (!mrbc_integer_p(&v[3])) {
+    if (mrbc_type(v[3]) != MRBC_TT_INTEGER) {
       mrbc_raise(vm, MRBC_CLASS(ArgumentError), "tick_delay must be integer");
       return;
     }
@@ -55,11 +54,11 @@ reset_psg_c(mrbc_vm *vm)
   rb.head = 0;
   rb.tail = 0;
   psg_cs_token_t t = PSG_enter_critical();
-  memset(&psg, 0, sizeof(psg));
-  psg.r.volume[0] = psg.r.volume[1] = psg.r.volume[2] = 15; // max volume. no envelope
-  psg.r.mixer = 0x38; // all noise off, all tone on
-  psg.mute_mask = 0x07; // all tracks muted. The driver must unmute first!
-  psg.pan[0] = psg.pan[1] = psg.pan[2] = 8; // center pan
+  memset(&psg_, 0, sizeof(psg_));
+  psg_.r.volume[0] = psg_.r.volume[1] = psg_.r.volume[2] = 15; // max volume. no envelope
+  psg_.r.mixer = 0x38; // all noise off, all tone on
+  psg_.mute_mask = 0x07; // all tracks muted. The driver must unmute first!
+  psg_.pan[0] = psg_.pan[1] = psg_.pan[2] = 8; // center pan
   PSG_exit_critical(t);
 }
 
@@ -71,7 +70,7 @@ c_driver_s_select_pwm(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1]) || !mrbc_integer_p(&v[2])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER || mrbc_type(v[2]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "arguments must be integers");
     return;
   }
@@ -93,7 +92,7 @@ c_driver_s_select_mcp4922(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "argument must be integer");
     return;
   }
@@ -134,7 +133,7 @@ c_driver_set_lfo(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1]) || !mrbc_integer_p(&v[2]) || !mrbc_integer_p(&v[3])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER || mrbc_type(v[2]) != MRBC_TT_INTEGER || mrbc_type(v[3]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "arguments must be integers");
     return;
   }
@@ -145,7 +144,7 @@ c_driver_set_lfo(mrbc_vm *vm, mrbc_value *v, int argc)
   mrbc_int_t tick_delay = 0;
   
   if (argc == 4) {
-    if (!mrbc_integer_p(&v[4])) {
+    if (mrbc_type(v[4]) != MRBC_TT_INTEGER) {
       mrbc_raise(vm, MRBC_CLASS(ArgumentError), "tick_delay must be integer");
       return;
     }
@@ -175,7 +174,7 @@ c_driver_set_pan(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1]) || !mrbc_integer_p(&v[2])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER || mrbc_type(v[2]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "arguments must be integers");
     return;
   }
@@ -185,7 +184,7 @@ c_driver_set_pan(mrbc_vm *vm, mrbc_value *v, int argc)
   mrbc_int_t tick_delay = 0;
   
   if (argc == 3) {
-    if (!mrbc_integer_p(&v[3])) {
+    if (mrbc_type(v[3]) != MRBC_TT_INTEGER) {
       mrbc_raise(vm, MRBC_CLASS(ArgumentError), "tick_delay must be integer");
       return;
     }
@@ -219,7 +218,7 @@ c_driver_set_timbre(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1]) || !mrbc_integer_p(&v[2])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER || mrbc_type(v[2]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "arguments must be integers");
     return;
   }
@@ -229,7 +228,7 @@ c_driver_set_timbre(mrbc_vm *vm, mrbc_value *v, int argc)
   mrbc_int_t tick_delay = 0;
   
   if (argc == 3) {
-    if (!mrbc_integer_p(&v[3])) {
+    if (mrbc_type(v[3]) != MRBC_TT_INTEGER) {
       mrbc_raise(vm, MRBC_CLASS(ArgumentError), "tick_delay must be integer");
       return;
     }
@@ -263,7 +262,7 @@ c_driver_set_legato(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1]) || !mrbc_integer_p(&v[2])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER || mrbc_type(v[2]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "arguments must be integers");
     return;
   }
@@ -273,7 +272,7 @@ c_driver_set_legato(mrbc_vm *vm, mrbc_value *v, int argc)
   mrbc_int_t tick_delay = 0;
   
   if (argc == 3) {
-    if (!mrbc_integer_p(&v[3])) {
+    if (mrbc_type(v[3]) != MRBC_TT_INTEGER) {
       mrbc_raise(vm, MRBC_CLASS(ArgumentError), "tick_delay must be integer");
       return;
     }
@@ -307,7 +306,7 @@ c_driver_mute(mrbc_vm *vm, mrbc_value *v, int argc)
     return;
   }
 
-  if (!mrbc_integer_p(&v[1]) || !mrbc_integer_p(&v[2])) {
+  if (mrbc_type(v[1]) != MRBC_TT_INTEGER || mrbc_type(v[2]) != MRBC_TT_INTEGER) {
     mrbc_raise(vm, MRBC_CLASS(ArgumentError), "arguments must be integers");
     return;
   }
@@ -317,7 +316,7 @@ c_driver_mute(mrbc_vm *vm, mrbc_value *v, int argc)
   mrbc_int_t tick_delay = 0;
   
   if (argc == 3) {
-    if (!mrbc_integer_p(&v[3])) {
+    if (mrbc_type(v[3]) != MRBC_TT_INTEGER) {
       mrbc_raise(vm, MRBC_CLASS(ArgumentError), "tick_delay must be integer");
       return;
     }
@@ -345,10 +344,10 @@ mrbc_picoruby_psg_gem_init(void)
   mrbc_class *class_Driver = mrbc_define_class_under(0, class_PSG, "Driver", mrbc_class_object);
 
   mrbc_value chip_clock = mrbc_integer_value(CHIP_CLOCK);
-  mrbc_define_const(0, class_Driver, "CHIP_CLOCK", &chip_clock);
+  mrbc_set_class_const(class_Driver, mrbc_str_to_symid("CHIP_CLOCK"), &chip_clock);
   
   mrbc_value sample_rate = mrbc_integer_value(SAMPLE_RATE);
-  mrbc_define_const(0, class_Driver, "SAMPLE_RATE", &sample_rate);
+  mrbc_set_class_const(class_Driver, mrbc_str_to_symid("SAMPLE_RATE"), &sample_rate);
 
   // Define TIMBRES hash
   mrbc_value timbres = mrbc_hash_new(0, 4);
@@ -368,7 +367,7 @@ mrbc_picoruby_psg_gem_init(void)
   mrbc_value invsawtooth_val = mrbc_integer_value(PSG_TIMBRE_INVSAWTOOTH);
   mrbc_hash_set(&timbres, &invsawtooth_sym, &invsawtooth_val);
   
-  mrbc_define_const(0, class_Driver, "TIMBRES", &timbres);
+  mrbc_set_class_const(class_Driver, mrbc_str_to_symid("TIMBRES"), &timbres);
 
   mrbc_define_method(0, class_Driver, "select_pwm", c_driver_s_select_pwm);
   mrbc_define_method(0, class_Driver, "select_mcp4922", c_driver_s_select_mcp4922);
@@ -385,4 +384,10 @@ mrbc_picoruby_psg_gem_init(void)
 void
 mrbc_picoruby_psg_gem_final(void)
 {
+}
+
+void
+mrbc_psg_init(void)
+{
+  mrbc_picoruby_psg_gem_init();
 }
