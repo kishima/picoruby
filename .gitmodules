@@ -13,3 +13,6 @@
 [submodule "mrbgems/mruby-bin-mrbc2"]
 	path = mrbgems/mruby-bin-mrbc2
 	url = https://github.com/picoruby/mruby-bin-mrbc2
+[submodule "mrbgems/picoruby-m5unified"]
+	path = mrbgems/picoruby-m5unified
+	url = git@github.com:kishima/picoruby-m5unified.git
