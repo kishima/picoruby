@@ -43,4 +43,6 @@ MRuby::CrossBuild.new("esp32") do |conf|
   conf.gem core: 'picoruby-rmt'
   conf.gem core: 'picoruby-mbedtls'
   conf.gem core: 'picoruby-adafruit_sk6812'
+
+  conf.gem core: 'picoruby-m5unified'
 end
